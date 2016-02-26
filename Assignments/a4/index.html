@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Assignment 4</title>
+  <link href="css/a4.css" media="all" rel="stylesheet" />
+  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+  <script src="http://code.highcharts.com/highcharts.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+  <meta content="authenticity_token" name="csrf-param" />
+</head>
+<body>
+
+<div class="container text-center">
+  <h1 class="text-center">Fitbit Stats in January 2016</h1>
+  <div id="tooltip" class="hidden">
+    <p><span id="heading"></span></p>
+    <p><span id="value"></span></p>
+  </div>
+  <div class="btn-container">
+    <button type="button" class="btn btn-sm active" value="step">Steps</button>
+    <button type="button" class="btn btn-sm" value="distance">Distance</button>
+  </div>
+</div>
+<script type="text/javascript">
+  function get_y_axis_name(data) {
+    if (data == 'step') {
+      return "Steps";
+    } else if (data == 'distance') {
+      return "Distance";
+    } else {
+      return "Unknown";
+    }
+  }
+  function daily_steps_chart(data) {
+    data_index = {
+      'step': 0,
+      'distance': 1,
+      'date': 2
+    }
+    dataset = [
+      [16970, 12, "2016 Jan 2"], [7302, 5, "2016 Jan 3"], [4655, 3, "2016 Jan 4"], [3079, 2, "2016 Jan 5"], [4618, 3, "2016 Jan 6"], [4111, 3, "2016 Jan 7"], [7411, 5, "2016 Jan 8"], [138, 0, "2016 Jan 9"], [15393, 11, "2016 Jan 10"], [6703, 5, "2016 Jan 11"], [3684, 3, "2016 Jan 12"], [4246, 3, "2016 Jan 13"], [4308, 3, "2016 Jan 14"], [4744, 3, "2016 Jan 15"], [15789, 11, "2016 Jan 16"], [4463, 3, "2016 Jan 17"], [4862, 3, "2016 Jan 18"], [4445, 3, "2016 Jan 19"], [4405, 3, "2016 Jan 20"], [0, 0, "2016 Jan 21"], [11616, 8, "2016 Jan 22"], [6454, 5, "2016 Jan 23"], [6183, 4, "2016 Jan 24"], [4778, 3, "2016 Jan 25"], [3850, 3, "2016 Jan 26"], [2593, 2, "2016 Jan 27"]
+    ];
+    var parseDate = d3.time.format("%Y %b %e");
+    dataset.forEach(function(d) {
+      d[data_index['date']] = parseDate.parse(d[data_index['date']]);
+    });
+    var margin = {top: 50, right: 70, bottom: 60, left: 70};
+    var w = 1000 - margin.left - margin.right;
+    var h = 400 - margin.top - margin.bottom;
+    var barPadding = 1;
+
+    var xScale = d3.scale.ordinal()
+      .domain(dataset.map(function(d) {
+          return d[data_index['date']];
+      }))
+      .rangeRoundBands([0, w], 0.4);
+
+    var dateFormat = d3.time.format('%b %e');
+    var yScale = d3.scale.linear()
+                .domain([0, d3.max(dataset, function(d) {return d[data_index[data]]; })])
+                .range([h, 0]);
+
+    //Define X axis
+    var xAxis = d3.svg.axis()
+              .scale(xScale)
+              .orient("bottom")
+              .ticks(10)
+              .tickFormat(dateFormat);
+
+    //Define Y axis
+    var yAxis = d3.svg.axis()
+              .scale(yScale)
+              .orient("left")
+              .ticks(5);
+
+    var svg = d3.select(".container")
+        .append("svg")
+        .attr("width", w + margin.left + margin.right)
+        .attr("height", h + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    svg.selectAll("rect")
+      .data(dataset)
+      .enter()
+      .append("rect")
+      .attr("class", data)
+      .attr("x", function(d, i) {
+        return xScale(d[data_index['date']]);
+      })
+      .attr("y", function(d, i){
+        return yScale(d[data_index[data]]);
+      })
+      .attr("width", xScale.rangeBand())
+      .attr("height", function(d, i) {
+        return h-yScale(d[data_index[data]]);
+      })
+      .on('mouseover', function(d) {
+        var text_suffix = ""
+        if (data == 'step') {
+          text_suffix = " Steps"
+        } else if (data == 'distance') {
+          text_suffix = " km"
+        }
+        d3.select("#tooltip")
+          .style("left", d3.event.pageX + 10 + "px")
+          .style("top", d3.event.pageY - 80 + "px")
+          .select("#value")
+          .text(d[data_index[data]] + text_suffix);
+
+        d3.select("#tooltip")
+          .select("#heading")
+          .text(dateFormat(d[data_index['date']]));
+
+        d3.select("#tooltip").classed("hidden", false);
+
+      })
+      .on('mouseout', function(d) {
+        d3.select("#tooltip").classed("hidden", true);
+      });
+
+    //Create X axis
+    svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + h + ")")
+      .call(xAxis)
+      .selectAll("text")  
+        .style("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em")
+        .attr("transform", "rotate(-45)" );
+    
+    //Create Y axis
+    svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis);
+
+    svg.append("text")
+      .attr("class", "x label")
+      .attr("text-anchor", "end")
+      .attr("x", w/2)
+      .attr("y", h + margin.bottom)
+      .text("Date");
+
+    svg.append("text")
+    .attr("class", "y label")
+    .attr("text-anchor", "end")
+    .attr("x", -h/2 + 15)
+    .attr("y", -margin.left + 15)
+    .attr("transform", "rotate(-90)")
+    .text(get_y_axis_name(data));
+
+    // Dynamic data update
+    d3.selectAll("button")
+      .on("click", function() {
+        $("button").removeClass("active")
+        $this = $(this);
+        $this.addClass("active");
+        data = $this.attr('value');
+        yScale.domain([0, d3.max(dataset, function(d) {return d[data_index[data]]; })]);
+        svg.selectAll("rect")
+          .data(dataset)
+          .transition()
+          .attr("y", yScale(0))
+          .attr("height", function(d, i) {
+            return h-yScale(0);
+          })
+
+        setTimeout(function() {
+          svg.selectAll("rect")
+            .data(dataset)
+            .transition()
+            .duration(500)
+            .attr("class", data)
+            .attr("y", function(d, i){
+              return yScale(d[data_index[data]]);
+            })
+            .attr("height", function(d, i) {
+              return h-yScale(d[data_index[data]]);
+            });
+        }, 500);
+
+        svg.select(".y.axis")
+          .transition()
+          .duration(1000)
+          .call(yAxis);
+
+        svg.select(".y.label")
+          .transition()
+          .duration(500)
+          .style("opacity", 0)
+          .transition()
+          .duration(500)
+          .style("opacity", 1)
+          .text(get_y_axis_name(data));
+      });
+  }
+
+  $(function() {
+    daily_steps_chart('step');
+  });
+</script>
+
+</body>
+</html>
