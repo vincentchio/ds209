@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Assignment 4</title>
+  <link href="css/a6.css" media="all" rel="stylesheet" />
+  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css" />
+  <script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+  <script type="text/javascript" src="javascripts/us-states.js"></script>
+  <script type="text/javascript" src="javascripts/states_hash.js"></script>
+  <script type="text/javascript" src="javascripts/gop.js"></script>
+  <script type="text/javascript" src="javascripts/dem.js"></script>
+  <meta content="authenticity_token" name="csrf-param" />
+</head>
+<body>
+
+<div id="header" class="container text-center">
+  <h1 id="title" class="text-center">2016 States Presidential Primary</h1>
+  <div class="btn-container">
+    <button type="button" class="btn dem btn-sm active" value="dem">Democratic</button>
+    <button type="button" class="btn gop btn-sm" value="gop">Republican</button>
+  </div>
+</div>
+<div id="map">
+</div>
+<script type="text/javascript">
+  function loadPrimary(primaryData, candidates) {
+    var statesPrimary = {}
+    for (var i=0; i < primaryData.length; i++) {
+      var state = statesHash[primaryData[i]["state"]]
+      if (state) {
+        var primary = null;
+        var primaryEstimate = -1;
+        for (var j=0; j < primaryData[i]["estimates"].length; j++) {
+          var estimate = primaryData[i]["estimates"][j];
+          var candidateIndex = candidates.indexOf(estimate["choice"]);
+          if (candidateIndex != -1 && estimate["value"] > primaryEstimate) {
+            primaryEstimate = estimate["value"];
+            primary = estimate["choice"];
+          }
+        }
+        if (primary) {
+          statesPrimary[state] = {'primary': primary, 'value': primaryEstimate};
+        }
+      }
+    }
+
+    var statesPrimaryData = $.extend(true, {}, statesData);
+    for (var i=0; i<statesPrimaryData["features"].length; i++) {
+      var feature = statesPrimaryData["features"][i];
+      var primary = statesPrimary[feature["properties"]["name"]]
+      feature["properties"]["primary"] = null;
+      feature["properties"]["value"] = -1;
+      if (primary) {
+        feature["properties"]["primary"] = primary["primary"]
+        feature["properties"]["value"] = primary["value"]
+      }
+    }
+    return statesPrimaryData
+  }
+  function loadDEM() {
+    return loadPrimary(DEM, ["Clinton", "Sanders"]);
+  }
+  function loadGOP() {
+    return loadPrimary(GOP, ["Trump", "Cruz", "Kasich"]);
+  }
+
+  function initMap() {
+    var map = L.map('map').setView([37.8, -96], 4);
+
+    L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+      attribution: 'Huffpost Pollster Data &copy;',
+      id: 'mapbox.light',
+      maxZoom: 18,
+      accessToken: 'pk.eyJ1IjoidmluY2VudGNoaW8iLCJhIjoiYWQ5MjkzZWM1ZGRlNDU3ZjdiZjI0NmUxYzE1NGNiNDIifQ.RKRYLJ4gmuYlbcA7K0K7aA',
+    }).addTo(map);
+    return map;
+  }
+
+  function getPrimaryColor(candidate, value) {
+    var saturations = []
+    if (candidate == 'Clinton') {
+      saturations = ['#208fd1', '#1d80bb', '#1971a5', '#16628f']
+    } else if (candidate == 'Sanders') {
+      saturations = ['#ba9cd4', '#ad8bcc', '#a179c5', '#9467bd']
+    } else if (candidate == 'Trump') {
+      saturations = ['#e64d00', '#cc4400', '#b33c00', '#993300']
+    } else if (candidate == 'Cruz') {
+      saturations = ['#48dceb', '#31d7e8', '#1ad3e6', '#17becf']
+    } else if (candidate == 'Kasich') {
+      return '#bcbd22'
+    }
+    if (saturations) {
+      return saturations[Math.floor(value / 100 * 4)];
+    }
+  }
+
+  function highlightFeature(e) {
+    var layer = e.target;
+
+    layer.setStyle({
+        weight: 5,
+        color: '#666',
+        dashArray: '',
+        fillOpacity: 0.7
+    });
+
+    if (!L.Browser.ie && !L.Browser.opera) {
+        layer.bringToFront();
+    }
+
+    info.update(layer.feature.properties);
+    $('.info.stats').show();
+  }
+
+  function resetHighlight(e) {
+    geojson.resetStyle(e.target);
+    info.update();
+    $('.info.stats').hide();
+  }
+
+  function loadStatePrimary(data) {
+    if (typeof geojson != "undefined") {
+      geojson.clearLayers();
+    }
+    geojson = L.geoJson(data, {
+      style: function(feature) {
+        primaryColor = getPrimaryColor(feature.properties.primary, feature.properties.value);
+        if (primaryColor) {
+          return {
+            fillColor: primaryColor,
+            color: '#fff',
+            fillOpacity: 1,
+            weight: 1,
+          }
+        } else {
+          return {
+            color: '#fff',
+            fillOpacity: 0.1,
+            weight: 1,
+          }
+        }
+      },
+      onEachFeature: function(feature, layer) {
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight,
+        });
+      }
+    }).addTo(map);
+  }
+
+  function resizeMap() {
+    var viewportHeight = $(window).height();
+    var headerHeight = $('#header').height();
+    $('#map').height(viewportHeight - headerHeight);
+  }
+
+  function loadLegend(candidates) {
+    if (typeof legend != "undefined") {
+      legend.removeFrom(map);
+    }
+    var Legend = L.Control.extend({
+      options: {
+        position: 'bottomright'
+      },
+      onAdd: function (map) {
+
+        var div = L.DomUtil.create('div', 'info legend');
+        for (var i = 0; i < candidates.length; i++) {
+            div.innerHTML +=
+                '<i style="background:' + getPrimaryColor(candidates[i], 50) + '"></i> ' + candidates[i] + '<br>';
+        }
+        return div;
+      }
+    })
+    legend = new Legend();
+    map.addControl(legend)
+  }
+
+  function loadInfo() {
+    info = L.control();
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info stats');
+        this.update();
+        $(this._div).hide();
+        return this._div;
+    };
+    info.update = function (props) {
+      var content = null;
+      if (props) {
+        if (props.primary) {
+          content = '<b>' + props.name + '</b><br />' + 
+          '<i style="background:' + getPrimaryColor(props.primary, 0) + '"></i> ' + props.primary + ": " + props.value + '%'
+        } else {
+          content = '<b>' + props.name + '</b><br />' + 'NA'
+        }
+      } else {
+        content = 'Hover over a state'
+      }
+      this._div.innerHTML = content;
+    };
+    info.addTo(map);
+  }
+
+  $(function() {
+    $('button').click(function(ele) {
+      $this = $(this);
+      party = $this.attr('value');
+      $("button").removeClass("active");
+      $this.addClass("active");
+      if (party == 'dem') {
+        $('#title').text('2016 States Democratic Presidential Primary')
+        loadStatePrimary(loadDEM());
+        loadLegend(["Clinton", "Sanders"]);
+      } else {
+        $('#title').text('2016 States Republican Presidential Primary')
+        loadStatePrimary(loadGOP());
+        loadLegend(["Trump", "Cruz", "Kasich"]);
+      }
+    })
+
+    $(window).resize(resizeMap);
+    resizeMap();
+    map = initMap();
+    loadInfo();
+    $('button.active').trigger('click');
+  })
+</script>
+
+</body>
+</html>
